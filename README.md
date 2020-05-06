@@ -1,6 +1,6 @@
-# PyBem2d
+# bem2d_python
 
-## What is PyBem2d?
+## What is bem2d_python?
 
 PyBem2d is a python module for 2D Boundary elements. I will eventually use it with HTOOL (https://github.com/htool-ddm/htool), Pierre Marchand's implementation of heirarchical matrices. Right now, it is in an early state of development, and is mostly a source of procrastination.
 

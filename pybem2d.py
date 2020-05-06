@@ -4,7 +4,7 @@ import numpy as _np
 
 class pybem2d:
     
-  def __init__(self,nodes,elems,nQuad,k):
+  def __init__(self,nodes,elems,nQuad,basisOrder,basisType,k):
       """ Construct an instance of the pybem2d class with the geometric and integration information.
       
       Parameters
@@ -20,10 +20,21 @@ class pybem2d:
       self.elems = elems
       self.nQuad = nQuad
       self.wavenumber = k
-      # build quadrature
+      # build quadrature rule
+      self.create_quad_rule()
       
+      if basisOrder >= 1.0:
+         print("order not implemented")
+      self.basisOrder = order
+      
+      if basisType == 'DP':
+        self.basisType = 'discontinuous'
+      else if basisType = 'P':
+        self.basisType = 'continuous'
+        
+        
       # compute normals, global_map, eta, functions
-      
+      self.prepare_surface()
         
         
   def get_coef_slp(I,J):
@@ -55,29 +66,71 @@ class pybem2d:
   
   def verify_geometry(self):
       pass
-  def compue_normals(self):
-    # compute normals
+  def compute_normals(self):
+    """ Calculate the normal vector for the mesh """
     
     normals = np.zeros(elemsShape)
     for idx in _np.range(0,self.nElems)
-      self.
-     
-     
-     
-     
-
+      c_nodes = self.nodes[:,self.elems[idx,:]];
+      dx = (c_nodes[0,1] - c_nodes[0,0])
+      dz = (c_nodes[1,1] - c_nodes[1,0])
+      normalMag = np.sqrt(dx*dx + dz*dz)
+      dx = dx/normalMag;
+      dz = dz/normalMag;
+      # normal direction is defined as to the right between node 0 and node 1
       
+      normals(0,idx) = -dz;
+      normals(1,idx) = dx;
+    
+    self.normals = normals
+
+  def create_global_to_local_map():
+    """Create map between global dof numbering and local dofs.
+    This will allow a function to requrest the global coefficient number
+    A class array global_to_local is created that contains the mappings
+    from the global DOF (aka row and column of the discretized matrix) to
+    the local DOF, the basis functions contributing to each row and column.
+    If the value of global_to_local_map is -1, then there is not basis function
+    that contributes. This is useful for finding edges and a closed domain
+    
+    
+    
+    discontinuous order 0 basis functions: (not implemented, planned)
+    global_to_local_map = 1xnElems
+      
+    discontinuous order 1 basis functions: (not implemented, not planned)
+    global_to_local_map = 2xnElems
+     
+    continuous order 1 basis functions: (not implemented, planned)
+    global_to_local_map = 2xnNodes, if the mesh is not closed, 
+      
+    the first index 
+      """
+    
+    # for discontinouous polynomials, the collocation points live on the nodes
+    # only order 0 discontinuous polynomials are implemented for now.
+    # A refactor is probably needed for more flexibility
+    if self.basisType == 'discontinuous':
+      # number of dofs contributing to the global index is 1
+      global_to_local_map = np.full((1, self.nElems) , -1, dtype=int)
+      
+    if self.basisType == 'continuous':
+        # linear basis functions have two dofs that contribute to each 
+        global_to_local_map = np.full((2 , self.nNodes) , -1,dtype=int)
+    
   def prepare_surface(self):
     nodesShape = self.nodes.shape()
     if nodesShape[0] != 2
       print("Nodes must have a shape of 2xNN, where NN is the number of nodes")
-   nNodes = nodesShape[1]
+   self.nNodes = nodesShape[1]
    
    elemsShape = self.elems.shape()
    if elemsShape[0] != 2
       print("Elems must have a shape of 2xNE, where NE is the number of elems")
-   nElems = elemsShape[1]
+   self.nElems = elemsShape[1]
    
-   self.nNodes = nNodes;
-   self.nElems = nElems;
-   self.normals = normals;
+   self.nNodes = nNodes
+   self.nElems = nElems
+   self.compute_normals()
+   self.create_global_to_local_map()
+  

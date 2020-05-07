@@ -93,18 +93,16 @@ class pybem2d:
     If the value of global_to_local_map is -1, then there is not basis function
     that contributes. This is useful for finding edges and a closed domain
     
-    
-    
-    discontinuous order 0 basis functions: (not implemented, planned)
-    global_to_local_map = 1xnElems
+    gobal_to_local_map: nBasis x nGlobalDOF
+    The values in this array correspond to the element number over which the
+    the integration occurs.
       
-    discontinuous order 1 basis functions: (not implemented, not planned)
-    global_to_local_map = 2xnElems
-     
-    continuous order 1 basis functions: (not implemented, planned)
-    global_to_local_map = 2xnNodes, if the mesh is not closed, 
-      
-    the first index 
+    The first index corresponds the basis functions. For DP0, there is only one 
+    basis function. For P1, there are two basis function. For now, no more basis
+    functions are planned to be implemented
+    
+    TODO: Implement the continuous and discontinuous basis function in their own
+      class and use polymorphism. Right now I have a lot of conditionals.
       """
     
     # for discontinouous polynomials, the collocation points live on the nodes
@@ -113,10 +111,13 @@ class pybem2d:
     if self.basisType == 'discontinuous':
       # number of dofs contributing to the global index is 1
       global_to_local_map = np.full((1, self.nElems) , -1, dtype=int)
+      # loop through the elements in order, which are the same as global DOF.
       
     if self.basisType == 'continuous':
         # linear basis functions have two dofs that contribute to each 
         global_to_local_map = np.full((2 , self.nNodes) , -1,dtype=int)
+        # loop through nodes, which are the same as global DOF
+    
     
   def prepare_surface(self):
     nodesShape = self.nodes.shape()

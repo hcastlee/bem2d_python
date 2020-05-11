@@ -112,12 +112,34 @@ class pybem2d:
       # number of dofs contributing to the global index is 1
       global_to_local_map = np.full((1, self.nElems) , -1, dtype=int)
       # loop through the elements in order, which are the same as global DOF.
+      for idx in range(0,self.nElems):
+          global_to_local_map[0,idx] = idx;
+      self.global_to_local_map = global_to_local_map 
       
     if self.basisType == 'continuous':
         # linear basis functions have two dofs that contribute to each 
         global_to_local_map = np.full((2 , self.nNodes) , -1,dtype=int)
         # loop through nodes, which are the same as global DOF
+        # Nodes to elems map is a list of elements that are attached to each node
+        # in fact, this is the same as the global to local map, so long as I put them
+        # in the right spot.
+        nodes_to_elems_map = np.full((2,self.nNodes) , -1 , dtype=int )
+        for idx in range(0,self.nElems)
+          node1 = self.elems[0,idx]
+          node2 = self.elems[1,idx]
+          nodes_to_elems_map[0,node1] = idx
+          nodes_to_elems_map[1,node2] = idx
+          global_to_local_map[0,node1] = idx
+          global_to_local_map[1,node2] = idx
+        # end node loop.
+        self.global_to_local_map = global_to_local_map
+    # loop through to check if there are any boundary points. 
+    # THis needs to be done for 
+    boundaryNodes = np.zeros((1,self.nNodes),dtype=bool)
+    boundaryElems = np.zeros((1,self.nElems),dtype=bool)
     
+    for idx in range(0,self.nNodes)
+        
     
   def prepare_surface(self):
     nodesShape = self.nodes.shape()

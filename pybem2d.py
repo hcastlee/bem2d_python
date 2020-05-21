@@ -2,9 +2,31 @@ import os,sys
 import ctypes
 import numpy as _np
 
-class pybem2d:
+def scale_quadrule(eta,wts,a1,b1,a2,b2,etaNew,wtsNew):
+    """Scale eta and wts quad rule that originally went from a1 to b1, to
+    a2 to b2 """
+    # Move to 0,1
+    oldRange = b1 - a1
+    newRange = b2 - a2
+    oldCenter = (a1+b1)/2
+    newCenter = (a2+b2)/2
+    etaNew = (eta - oldCenter)/oldRange*newRange + newCenter
+    wtsNew = wts/oldRange*newRange
+  
+  def tensorquad(x,wx,y,wy):
+       """Combine two quadrules in the x and y direction into a 2D tensor rule"""
     
-  def __init__(self,nodes,elems,nQuad,basisOrder,basisType,k):
+       nx=len(x)
+       ny=len(y)
+       m=numpy.mgrid[0:nx,0:ny].reshape(2,-1)
+       x2=numpy.vstack((x[m[0]],y[m[1]]))
+       w2=wx[m[0]]*wy[m[1]]
+       return x2,w2   
+class pybem2d:
+
+    
+    
+  def __init__(self,nodes,elems,nQuad,nQuadSing,basisOrder,basisType,k):
       """ Construct an instance of the pybem2d class with the geometric and integration information.
       
       Parameters
@@ -15,21 +37,30 @@ class pybem2d:
           Surface connectivity. Can be an open surface.
           This library will figure out adjacency
           NE = NN-1
+      nQuad:
+      nQuadSing:
+      basisOrder:
+      basisType:
+      k:
       """
       self.nodes = nodes
       self.elems = elems
       self.nQuad = nQuad
+      self.nQuadSing = nQuadSing
       self.wavenumber = k
       # build quadrature rule
       self.create_quad_rule()
       
-      if basisOrder >= 1.0:
-         print("order not implemented")
-      self.basisOrder = order
+      if basisOrder > 1.0:
+         print("order not implemented. Error")
+         break # this may not work...
+      else
+          self.basisOrder = order
+          
       
       if basisType == 'DP':
         self.basisType = 'discontinuous'
-      else if basisType = 'P':
+      elif basisType == 'P':
         self.basisType = 'continuous'
         
         
@@ -61,16 +92,66 @@ class pybem2d:
     """
 
   def create_quad_rule(self):
-      """ computes gauss-quadrature rules and stores result in the clas parameters"""
-      self.eta, self.wts = _np.polynomials.legendre.leggauss(self.nQuad)
+      """computes gauss-quadrature rules and stores result in the class parameters
+      Also compute refined quadrature rules for singular elements"""
+      eta, wts = _np.polynomial.legendre.leggauss(self.nQuad)
+      self.eta = (eta+1)/2.0
+      self.wts = wts/2.0;
+      
+  def create_refined_composite_quad_rule(self):
+      """Adapted from Timo Betcke's pybem2d library"""
+      self.x_adapted=numpy.array([])
+      self.w_adapted=numpy.array([])
+      self.sigma = (np.sqrt(2.0)-1)*(np.sqrt(2.0)-1) # this I borrowed from Xavier Clayes' bemtool
+      self.recDepth = 3;
+      a,b=self.sigma,1
+      for i in range(self.recDepth+1):
+          self.eta_adapted1D=numpy.hstack([self.eta_adapted1D,a+(b-a)*self.eta])
+          self.wts_adapted1D=numpy.hstack([self.wts_adapted1D,(b-a)*self.wts])
+          a*=self.sigma
+          b*=self.sigma
+
+
+  def singular_quad_rule_dp0(self):
+      """creates a singular quadrature rule for an element.
+      Need to split the integration interval into (0,0.5) and (0.5,1)
+      Use the adapted singular quadrature rule"""
+      scale_quadrule(self.eta_adapted1D,self.wts_adapted1D,0,1,0,0.5,eta_first_half,wts_first_half)
+      scale_quadrule(self.eta_adapted1D,self.wts_adapted1D,0,1,0.5,1.0,eta_second_half,wts_second_half)
+      self.eta_singular_dp0 = _np.hstack([eta_first_half,eta_second_half])
+      self.wts_singular_dp0 = _np.hstack([wts_first_half,wts_second_half])
+      
+      
+ 
+          
+  def singular_quad_rule_p1(self):
+      """creates a singular quadrature rule for an element.
+     don't need to split the integration up, since the singular integration
+     takes place over two elements"""
+      # using refined quad rule for each element. need to reverse quad rule for first element (idx0) and unreversed for second element (idx1). May be able to generalize to higher-order elements. 
+      self.eta_singular_p1 = _np.vstack((_np.fliplr(self.eta_adapted1D),self.eta_adapted1D))
+      self.wts_singular_p1 = _np.vstack((_np.fliplr(self.wts_adapted1D),self.wts_adapted1D))
+
+       
+  def define_shape_functions(self):
+      """Define regular shape functions"""
+      if self.basisType == 'discontinuous':
+          self.basisNum = 1;
+          self.phin = _np.ones((self.nBasis,1) , dtype=float64);
+      elif self.basisType == 'continuous':
+          self.basisNum = 1;
+          self.phin = _np.zeros((2 , self.nBasis) , dtype=float64);
+          #regullar shape functions
+          self.phin(1,:) = (1.0 - self.eta)/2
+          self.phin(2,:) = (1.0 + self.eta)/2
+          # singuar shape functions times the jacobian
+
   
-  def verify_geometry(self):
-      pass
   def compute_normals(self):
     """ Calculate the normal vector for the mesh """
     
     normals = np.zeros(elemsShape)
-    for idx in _np.range(0,self.nElems)
+    for idx in _np.range(0,self.nElems):
       c_nodes = self.nodes[:,self.elems[idx,:]];
       dx = (c_nodes[0,1] - c_nodes[0,0])
       dz = (c_nodes[1,1] - c_nodes[1,0])
@@ -115,16 +196,21 @@ class pybem2d:
       for idx in range(0,self.nElems):
           global_to_local_map[0,idx] = idx;
       self.global_to_local_map = global_to_local_map 
+      # disable checking boundary nodes and elems for now...
+      self.boundaryNodes = None
+      self.boundaryElems = None
       
-    if self.basisType == 'continuous':
+    elif self.basisType == 'continuous':
         # linear basis functions have two dofs that contribute to each 
         global_to_local_map = np.full((2 , self.nNodes) , -1,dtype=int)
         # loop through nodes, which are the same as global DOF
         # Nodes to elems map is a list of elements that are attached to each node
         # in fact, this is the same as the global to local map, so long as I put them
         # in the right spot.
+        boundaryNodes = np.full((1,self.nNodes),-1,dtype=int)
+        boundaryElems = np.full((1,self.nElems),-1,dtype=int)
         nodes_to_elems_map = np.full((2,self.nNodes) , -1 , dtype=int )
-        for idx in range(0,self.nElems)
+        for idx in range(0,self.nElems):
           node1 = self.elems[0,idx]
           node2 = self.elems[1,idx]
           nodes_to_elems_map[0,node1] = idx
@@ -133,12 +219,15 @@ class pybem2d:
           global_to_local_map[1,node2] = idx
         # end node loop.
         self.global_to_local_map = global_to_local_map
-    # loop through to check if there are any boundary points. 
-    # THis needs to be done for 
-    boundaryNodes = np.zeros((1,self.nNodes),dtype=bool)
-    boundaryElems = np.zeros((1,self.nElems),dtype=bool)
+        
+        # loop through to check if there are any boundary points. 
+        # Boundary points are nodes that are attached to only one element
+        # Actuall, this information is already in there. if global_to_local_map ==-1, then we are on a boundary.
+        # if global DOF is a boundary node, then return zero for the coefficient. 
+
     
-    for idx in range(0,self.nNodes)
+   
+            
         
     
   def prepare_surface(self):
